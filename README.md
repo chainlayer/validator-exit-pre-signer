@@ -4,6 +4,10 @@
 - Ethdo not automatically updated.
 - Input (keystores) and Output (pre-signed messages) are not automatically cleared.
 
+### INSTALL DEPENDENCIES
+
+pip3 install -r requirements.txt
+
 ### RUN (ONLINE WITH OFFLINE-PREPARATION)
 ./main.py
 

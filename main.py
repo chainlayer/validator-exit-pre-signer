@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
 # Author: Jonas, ChainLayer
 
-import json, subprocess, platform, os
+import json, subprocess, platform, os, socket, getpass
+from contextlib import closing
+from sys import exit
+from progress.bar import ChargingBar
+
 
 # Get user input
 def get_user_data():
     global keystore_password
-    keystore_password = input('\u001b[31m[+] Please enter your keystore password: ')
+    keystore_password = getpass.getpass(prompt='[+] Please enter your keystore password: ')
 
     global consensus_node
-    consensus_node = input('\u001b[31m[+] Please enter IP address of a consensus node (testnet/mainnet): ')
+    consensus_node = input('[+] Please enter IP address of a consensus node (testnet/mainnet): ')
+
+    global consensus_node_port
+    consensus_node_port = input('[+] Please enter RPC port of the consensus node: ')
     
 # Determine which ethdo binary to use (Linux / Darwin)
 def determine_os():
@@ -33,17 +40,36 @@ def determine_os():
     except Exception as e:
         print(e)
 
+def check_consensus_connection():
+    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+        sock.settimeout(5)
+        if sock.connect_ex((str(consensus_node), int(consensus_node_port))) == 0:
+            print("\u001b[32m[+] Connected to consensus node %s on port %s" % (consensus_node, consensus_node_port))
+        else:
+            print("\u001b[33m[+] Could not connect to consensus node %s on port %s. Exiting..." % (consensus_node, consensus_node_port))
+            exit()
+
 # Generate offline preparation data from consensus node
 def offline_preparation():
     print("\u001b[33m[+] Starting to prepare offline data from consensus node. This might take a while...")
     try:
-        cmd = "%s --connection http://%s:5052 validator exit --prepare-offline --allow-insecure-connections --timeout 10m" % (ethdo_binary, consensus_node)
+        cmd = "%s --connection http://%s:%s validator exit --prepare-offline --allow-insecure-connections --timeout 10m" % (ethdo_binary, consensus_node, consensus_node_port)
         print("\u001b[33m[+] Running command: " + cmd)
         subprocess.run(cmd, shell=True,  capture_output=True)
         print("\u001b[32m[+] Network state fetched")
 
     except Exception as e:
         print(e)
+
+def count_loaded_keystores():
+    dir_path = "./data/input/"
+    total_files = 0
+    for path in os.listdir(dir_path):
+        if os.path.isfile(os.path.join(dir_path, path)):
+            if path.startswith("keystore"):
+                total_files += 1
+    print("\u001b[32m[+] Loaded %s keystores for processing" % total_files)
+    return total_files
 
 # Create temporary wallet that is located in the wallets folder.
 def create_wallet():
@@ -79,21 +105,28 @@ def cleanup_offline_preparation_data():
         print(e)
 
 def main():
+    total_loaded_keys = count_loaded_keystores() 
     get_user_data()
+    check_consensus_connection()
     determine_os()
-    offline_preparation()
+    #offline_preparation()
     print("\u001b[33m[+] Starting to create wallets, adding keys from keystores and generating pre-signed messages")
     keystores_count = 0
-    for file in os.listdir("./data/input"):
-        if file.startswith("keystore"):
-            create_wallet()
-            with open("./data/input/" + file, 'r') as f:
-                result = json.load(f)
-                pubKey = "0x" + result["pubkey"]
-            add_key_from_keystore(file)
-            generate_and_sign_exit_messages(pubKey)
-            cleanup_wallets()
-            keystores_count += 1
+    with ChargingBar('[+] Processing keystores', max=total_loaded_keys) as bar:
+        for i in range(total_loaded_keys):
+            for file in os.listdir("./data/input"):
+                if file.startswith("keystore"):
+                    create_wallet()
+                    with open("./data/input/" + file, 'r') as f:
+                        result = json.load(f)
+                        pubKey = "0x" + result["pubkey"]
+                    add_key_from_keystore(file)
+                    generate_and_sign_exit_messages(pubKey)
+                    cleanup_wallets()
+                    keystores_count += 1
+                    bar.next()
+        bar.finish()
+    
     print("\u001b[32m[+] Successfully created pre-signed messages for %d keystores, check your output folder" % (keystores_count))
     print("\u001b[31m[+] Remember to clean your input/output folders.")
     cleanup_offline_preparation_data()
