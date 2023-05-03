@@ -109,7 +109,7 @@ def main():
     get_user_data()
     check_consensus_connection()
     determine_os()
-    #offline_preparation()
+    offline_preparation()
     print("\u001b[33m[+] Starting to create wallets, adding keys from keystores and generating pre-signed messages")
     keystores_count = 0
     with ChargingBar('[+] Processing keystores', max=total_loaded_keys) as bar:
