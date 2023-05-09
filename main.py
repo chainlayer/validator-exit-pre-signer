@@ -125,7 +125,7 @@ def main():
                     cleanup_wallets()
                     keystores_count += 1
                     bar.next()
-        bar.finish()
+    bar.finish()
     
     print("\u001b[32m[+] Successfully created pre-signed messages for %d keystores, check your output folder" % (keystores_count))
     print("\u001b[31m[+] Remember to clean your input/output folders.")
